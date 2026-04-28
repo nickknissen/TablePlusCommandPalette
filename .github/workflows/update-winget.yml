@@ -1,5 +1,17 @@
 name: Update WinGet
 
+# Submits a `wingetcreate update` PR to microsoft/winget-pkgs whenever a
+# GitHub Release with MSIX assets is published.
+#
+# IMPORTANT: This workflow only handles UPDATES (existing manifest in
+# winget-pkgs). The FIRST submission for nickknissen.TablePlusCommandPalette
+# must be done once manually with `wingetcreate new` because the package
+# metadata (PackageName, ShortDescription, License, etc.) doesn't exist
+# yet for `update` to extend.
+#
+# After that first manifest is merged, every subsequent release flows
+# through this workflow automatically.
+
 on:
   release:
     types: [published]
@@ -33,49 +45,19 @@ jobs:
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
           $repo = "${{ github.repository }}"
-          $x64Url = "https://github.com/$repo/releases/download/$version/TablePlusCommandPalette_${version}.0_x64.msix"
+
+          # The MSIX assets are attached to the GitHub release by build-msix.ps1.
+          # File naming matches what build-msix.ps1 produces: <Name>_<Version>.0_<arch>.msix.
+          $x64Url   = "https://github.com/$repo/releases/download/$version/TablePlusCommandPalette_${version}.0_x64.msix"
           $arm64Url = "https://github.com/$repo/releases/download/$version/TablePlusCommandPalette_${version}.0_arm64.msix"
 
+          # wingetcreate auto-detects InstallerType=msix from the file extension
+          # and computes InstallerSha256, SignatureSha256, and PackageFamilyName
+          # by inspecting each MSIX. No extra metadata injection needed for MSIX.
           .\wingetcreate.exe update nickknissen.TablePlusCommandPalette `
             --version $version `
             --urls "$x64Url|x64" "$arm64Url|arm64" `
             --out manifests
-
-          $localeFile = Get-ChildItem -Path manifests -Recurse -Filter "*.locale.en-US.yaml" | Select-Object -First 1
-          $localeContent = Get-Content $localeFile.FullName -Raw
-
-          if ($localeContent -notmatch '(?m)^PublisherUrl:') {
-            $localeContent = $localeContent -replace '(?m)^PackageName:.*$', "`$0`nPublisherUrl: https://github.com/nickknissen`nPublisherSupportUrl: https://github.com/nickknissen/TablePlusCommandPalette/issues"
-          }
-          if ($localeContent -notmatch '(?m)^PackageUrl:') {
-            $localeContent = $localeContent -replace '(?m)^PackageName:.*$', "`$0`nPackageUrl: https://github.com/nickknissen/TablePlusCommandPalette"
-          }
-          if ($localeContent -notmatch '(?m)^LicenseUrl:') {
-            $localeContent = $localeContent -replace '(?m)^License:.*$', "`$0`nLicenseUrl: https://github.com/nickknissen/TablePlusCommandPalette/blob/main/LICENSE"
-          }
-          if ($localeContent -notmatch '(?m)^Tags:\s*(?:\r?\n\s*- .*?)*\r?\n\s*- windows-commandpalette-extension\s*$') {
-            if ($localeContent -match '(?m)^Tags:') {
-              $localeContent = $localeContent -replace '(?m)^Tags:\s*(?:\r?\n\s*- .*?)*', "Tags:`n- tableplus`n- database`n- command-palette`n- powertoys`n- windows-commandpalette-extension"
-            } else {
-              $localeContent = $localeContent -replace '(?m)^ShortDescription:.*$', "`$0`nTags:`n- tableplus`n- database`n- command-palette`n- powertoys`n- windows-commandpalette-extension"
-            }
-          }
-
-          Set-Content $localeFile.FullName -Value $localeContent -NoNewline
-
-          $installerFile = Get-ChildItem -Path manifests -Recurse -Filter "*.installer.yaml" | Select-Object -First 1
-          $installerContent = Get-Content $installerFile.FullName -Raw
-          if ($installerContent -notmatch 'Microsoft\.WindowsAppRuntime\.1\.8') {
-            $dependencyBlock = @"
-          Dependencies:
-            PackageDependencies:
-            - PackageIdentifier: Microsoft.WindowsAppRuntime.1.8
-          Scope: user
-          "@
-            $dependencyBlock = ($dependencyBlock -split "`n" | ForEach-Object { $_.TrimEnd() } | Where-Object { $_ -ne "" }) -join "`n"
-            $installerContent = $installerContent -replace '(?m)^Installers:', "$dependencyBlock`nInstallers:"
-          }
-          Set-Content $installerFile.FullName -Value $installerContent -NoNewline
 
           $token = "${{ secrets.WINGET_PAT }}"
           if (-not $token) {
