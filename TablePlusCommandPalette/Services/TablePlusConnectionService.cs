@@ -13,10 +13,12 @@ public sealed class TablePlusConnectionService
     private readonly string _connectionsPath;
     private readonly string _groupsPath;
 
+#pragma warning disable CS0649, CS0169 // Unused under DEMO_MODE.
     private readonly object _cacheLock = new();
     private TablePlusQueryResult? _cachedResult;
     private DateTime _connectionsLastWrite = DateTime.MinValue;
     private DateTime _groupsLastWrite = DateTime.MinValue;
+#pragma warning restore CS0649, CS0169
 
     public TablePlusConnectionService()
     {
@@ -32,8 +34,13 @@ public sealed class TablePlusConnectionService
         });
     }
 
+#pragma warning disable CA1822 // GetItems is static under DEMO_MODE — keep instance signature for the live path.
     public TablePlusQueryResult GetItems()
+#pragma warning restore CA1822
     {
+#if DEMO_MODE
+        return DemoTablePlusData.Result();
+#else
         var connectionsTimestamp = GetLastWriteTimeUtcSafe(_connectionsPath);
         var groupsTimestamp = GetLastWriteTimeUtcSafe(_groupsPath);
 
@@ -56,6 +63,7 @@ public sealed class TablePlusConnectionService
             _groupsLastWrite = groupsTimestamp;
             return _cachedResult;
         }
+#endif
     }
 
     private TablePlusQueryResult LoadFromDisk()
