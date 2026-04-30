@@ -4,8 +4,14 @@ name: Build Store Bundle
 # submission via Partner Center. The Store re-signs the package during
 # ingestion, so no signing cert is needed at build time.
 #
-# Trigger manually with the target version (e.g. 1.0.1). The bundle is
-# attached as a workflow artifact named "store-bundle-<version>".
+# Trigger manually with the target version (e.g. 1.0.1). On success the
+# workflow:
+#   1. Uploads the bundle as a workflow artifact "store-bundle-<version>"
+#   2. Tags the commit and creates a GitHub Release "v<version>" with
+#      the bundle and individual MSIX files attached.
+#
+# The release is the source-of-truth artifact for the version that
+# gets uploaded to Partner Center.
 
 on:
   workflow_dispatch:
@@ -13,6 +19,10 @@ on:
       version:
         description: "Version (e.g. 1.0.1)"
         required: true
+      release_notes:
+        description: "Release notes (markdown, optional)"
+        required: false
+        default: ""
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -20,6 +30,8 @@ env:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -98,3 +110,40 @@ jobs:
             TablePlusCommandPalette/AppPackages/*.msixbundle
             TablePlusCommandPalette/AppPackages/*/TablePlusCommandPalette_*_Test/*.msix
           if-no-files-found: error
+
+      - name: Stage release files
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $stage = "release-files"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item "TablePlusCommandPalette\AppPackages\TablePlusCommandPalette_${env:VERSION}.0_Bundle.msixbundle" $stage
+          Copy-Item "TablePlusCommandPalette\AppPackages\x64\TablePlusCommandPalette_${env:VERSION}.0_x64_Test\TablePlusCommandPalette_${env:VERSION}.0_x64.msix" $stage
+          Copy-Item "TablePlusCommandPalette\AppPackages\ARM64\TablePlusCommandPalette_${env:VERSION}.0_arm64_Test\TablePlusCommandPalette_${env:VERSION}.0_arm64.msix" $stage
+          Get-ChildItem $stage
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          body: |
+            ${{ inputs.release_notes }}
+
+            ---
+
+            **Install from the Microsoft Store:** <https://apps.microsoft.com/detail/9P4L93228V63>
+
+            The MSIX files attached to this release are unsigned — the
+            Microsoft Store re-signs them during ingestion. They are
+            published here as the source-of-truth artifact for the
+            Partner Center submission, not for direct sideload install.
+          files: |
+            release-files/TablePlusCommandPalette_${{ inputs.version }}.0_Bundle.msixbundle
+            release-files/TablePlusCommandPalette_${{ inputs.version }}.0_x64.msix
+            release-files/TablePlusCommandPalette_${{ inputs.version }}.0_arm64.msix
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
+          make_latest: true
