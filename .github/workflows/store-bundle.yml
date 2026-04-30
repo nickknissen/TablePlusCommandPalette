@@ -32,6 +32,7 @@ jobs:
           --configuration Release
           -p:GenerateAppxPackageOnBuild=true
           -p:Platform=x64
+          -p:RuntimeIdentifier=win-x64
           -p:AppxPackageDir=AppPackages\x64\
           -p:Version=${{ inputs.version }}
           -p:AssemblyVersion=${{ inputs.version }}.0
@@ -45,6 +46,7 @@ jobs:
           --configuration Release
           -p:GenerateAppxPackageOnBuild=true
           -p:Platform=ARM64
+          -p:RuntimeIdentifier=win-arm64
           -p:AppxPackageDir=AppPackages\ARM64\
           -p:Version=${{ inputs.version }}
           -p:AssemblyVersion=${{ inputs.version }}.0
