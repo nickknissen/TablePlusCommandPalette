@@ -1,0 +1,93 @@
+name: Build Store Bundle
+
+# Builds an unsigned x64 + ARM64 .msixbundle ready for Microsoft Store
+# submission via Partner Center. The Store re-signs the package during
+# ingestion, so no signing cert is needed at build time.
+#
+# Trigger manually with the target version (e.g. 1.0.1). The bundle is
+# attached as a workflow artifact named "store-bundle-<version>".
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 1.0.1)"
+        required: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Build x64 MSIX
+        working-directory: TablePlusCommandPalette
+        run: >-
+          dotnet build TablePlusCommandPalette.csproj
+          --configuration Release
+          -p:GenerateAppxPackageOnBuild=true
+          -p:Platform=x64
+          -p:AppxPackageDir=AppPackages\x64\
+          -p:Version=${{ inputs.version }}
+          -p:AssemblyVersion=${{ inputs.version }}.0
+          -p:FileVersion=${{ inputs.version }}.0
+          -p:AppxPackageVersion=${{ inputs.version }}.0
+
+      - name: Build ARM64 MSIX
+        working-directory: TablePlusCommandPalette
+        run: >-
+          dotnet build TablePlusCommandPalette.csproj
+          --configuration Release
+          -p:GenerateAppxPackageOnBuild=true
+          -p:Platform=ARM64
+          -p:AppxPackageDir=AppPackages\ARM64\
+          -p:Version=${{ inputs.version }}
+          -p:AssemblyVersion=${{ inputs.version }}.0
+          -p:FileVersion=${{ inputs.version }}.0
+          -p:AppxPackageVersion=${{ inputs.version }}.0
+
+      - name: Bundle x64 + ARM64 into .msixbundle
+        working-directory: TablePlusCommandPalette
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $x64Msix = "AppPackages\x64\TablePlusCommandPalette_${env:VERSION}.0_x64_Test\TablePlusCommandPalette_${env:VERSION}.0_x64.msix"
+          $armMsix = "AppPackages\ARM64\TablePlusCommandPalette_${env:VERSION}.0_arm64_Test\TablePlusCommandPalette_${env:VERSION}.0_arm64.msix"
+
+          foreach ($p in @($x64Msix, $armMsix)) {
+            if (-not (Test-Path $p)) { throw "Expected MSIX not found: $p" }
+          }
+
+          @"
+          [Files]
+          "$x64Msix" "TablePlusCommandPalette_${env:VERSION}.0_x64.msix"
+          "$armMsix" "TablePlusCommandPalette_${env:VERSION}.0_arm64.msix"
+          "@ | Set-Content -Encoding utf8 -NoNewline bundle_mapping.txt
+
+          # Resolve makeappx.exe from the latest installed Windows 10/11 SDK.
+          $sdkBin = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match "^10\." } | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $sdkBin) { throw "Windows 10/11 SDK not found on the runner." }
+          $makeappx = Join-Path $sdkBin.FullName "x64\makeappx.exe"
+
+          $bundleOut = "AppPackages\TablePlusCommandPalette_${env:VERSION}.0_Bundle.msixbundle"
+          & $makeappx bundle /f bundle_mapping.txt /p $bundleOut /bv "${env:VERSION}.0" /o
+          if ($LASTEXITCODE -ne 0) { throw "makeappx bundle failed (exit $LASTEXITCODE)" }
+
+          $sizeMB = [math]::Round((Get-Item $bundleOut).Length / 1MB, 2)
+          Write-Host "Built: $bundleOut ($sizeMB MB)"
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-bundle-${{ inputs.version }}
+          path: |
+            TablePlusCommandPalette/AppPackages/*.msixbundle
+            TablePlusCommandPalette/AppPackages/*/TablePlusCommandPalette_*_Test/*.msix
+          if-no-files-found: error
