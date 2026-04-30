@@ -7,8 +7,8 @@ name: Build Store Bundle
 # Trigger manually with the target version (e.g. 1.0.1). On success the
 # workflow:
 #   1. Uploads the bundle as a workflow artifact "store-bundle-<version>"
-#   2. Tags the commit and creates a GitHub Release "v<version>" with
-#      the bundle and individual MSIX files attached.
+#   2. Tags the commit "<version>" and creates a GitHub Release named
+#      "v<version>" with the bundle and individual MSIX files attached.
 #
 # The release is the source-of-truth artifact for the version that
 # gets uploaded to Partner Center.
@@ -126,7 +126,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ inputs.version }}
+          tag_name: ${{ inputs.version }}
           name: v${{ inputs.version }}
           body: |
             ${{ inputs.release_notes }}
