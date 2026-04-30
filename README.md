@@ -3,6 +3,8 @@
 A PowerToys Command Palette extension that surfaces your TablePlus database
 connections so you can launch them directly from CmdPal.
 
+![Screenshot](docs/01-screenshot.jpg)
+
 ## Features
 
 - Browse all TablePlus connections grouped by **connection group**
