@@ -13,7 +13,7 @@ connections so you can launch them directly from CmdPal.
 
 ## How it works
 
-This extension reads `Connections.plist` and `ConnectionGroups.plist` from
+The extension reads `Connections.plist` and `ConnectionGroups.plist` from
 TablePlus' local data directory and renders each connection as a Command
 Palette item that launches `tableplus://?id=<connection-id>` when invoked.
 
@@ -25,13 +25,13 @@ Palette item that launches `tableplus://?id=<connection-id>` when invoked.
 
 ## Installation
 
-### Option 1: Microsoft Store (recommended)
+### Microsoft Store
 
 [![Get from Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get-blue?logo=microsoft-store)](https://apps.microsoft.com/detail/9P4L93228V63)
 
 Open the listing: <https://apps.microsoft.com/detail/9P4L93228V63>
 
-### Option 2: WinGet (Microsoft Store source)
+### WinGet (Microsoft Store source)
 
 ```powershell
 winget install --source msstore 9P4L93228V63
@@ -39,12 +39,7 @@ winget install --source msstore 9P4L93228V63
 
 ### Build from source
 
-```powershell
-dotnet restore
-dotnet build TablePlusCommandPalette.sln -c Release -p:Platform=x64
-```
-
-See [Development](#development) below for the full build / sideload flow.
+See [Development](#development) below.
 
 ## Usage
 
@@ -54,23 +49,52 @@ After installation, open **PowerToys Command Palette** and look for the
 
 ## Development
 
-### Build from source
+### Local build for testing
 
 ```powershell
-dotnet restore
-dotnet build TablePlusCommandPalette.sln
+.\TablePlusCommandPalette\build-msix.ps1 -Version 1.0.1 -Platforms @('x64','arm64') -Bundle
 ```
 
-### Publish a self-contained build
+Produces `TablePlusCommandPalette\bin\Release\msix\TablePlusCommandPalette_1.0.1.0.msixbundle`.
+With no `-CertPath` / `-CertBase64`, the package is left unsigned.
 
-Example for x64:
+For a single-architecture build during development:
 
 ```powershell
-dotnet publish .\TablePlusCommandPalette\TablePlusCommandPalette.csproj `
-  --configuration Release `
-  --runtime win-x64 `
-  --self-contained true `
-  /p:WindowsPackageType=None
+.\TablePlusCommandPalette\build-msix.ps1 -Version 1.0.1 -Platforms x64
+```
+
+### Sign locally
+
+The shared CmdPal signing cert lives in 1Password under
+`Private/CmdPal Signing Cert`. The same cert is used by
+[TablePlusCommandPalette](https://github.com/nickknissen/TablePlusCommandPalette),
+[TailscaleCommandPalette](https://github.com/nickknissen/TailscaleCommandPalette),
+and
+[SSMSCommandPalette](https://github.com/nickknissen/SSMSCommandPalette).
+
+```powershell
+.\scripts\sign-local.ps1 -Path .\TablePlusCommandPalette\bin\Release\msix\*.msix*
+```
+
+### Install / uninstall
+
+```powershell
+Add-AppxPackage .\TablePlusCommandPalette\bin\Release\msix\TablePlusCommandPalette_1.0.1.0_x64.msix
+
+# Remove every installed copy (sideloaded, Store, dev-registered):
+.\scripts\uninstall.ps1
+```
+
+### Demo mode
+
+Pass `-Demo` to `build-msix.ps1` to compile with the `DEMO_MODE` define so
+the extension surfaces hard-coded demo connections instead of reading the
+local TablePlus data files (used for Microsoft Store screenshots so real
+connection names aren't leaked).
+
+```powershell
+.\TablePlusCommandPalette\build-msix.ps1 -Version 1.0.1 -Platforms x64 -Demo
 ```
 
 ## Releasing
@@ -99,37 +123,12 @@ When the run finishes:
    under your app's **Packages** section. The Store re-signs the package
    during ingestion regardless of the build-time signature.
 
-### Signing prerequisites
-
 The release workflow expects two GitHub repository secrets:
 
 - `SIGNING_PFX_BASE64` — base64-encoded PFX containing the code-signing
   certificate. The cert subject must match the `Publisher` declared in
   `Package.appxmanifest`.
 - `SIGNING_PFX_PASSWORD` — PFX password.
-
-The shared CmdPal signing cert (used by this repo and
-[TailscaleCommandPalette](https://github.com/nickknissen/TailscaleCommandPalette))
-lives in 1Password under `Private/CmdPal Signing Cert`.
-
-### Local build for testing
-
-```powershell
-.\TablePlusCommandPalette\build-msix.ps1 -Version 1.0.1 -Platforms @('x64','arm64') -Bundle
-```
-
-Produces `TablePlusCommandPalette\bin\Release\msix\TablePlusCommandPalette_1.0.1.0.msixbundle`.
-With no `-CertPath`/`-CertPassword`, the package is left unsigned.
-
-To sign locally with the cert from 1Password:
-
-```powershell
-.\scripts\sign-local.ps1 -Path .\TablePlusCommandPalette\bin\Release\msix\*.msix*
-```
-
-Pass `-Demo` to `build-msix.ps1` to compile with the `DEMO_MODE` define so
-the extension surfaces hard-coded demo data instead of reading the local
-TablePlus connection files (used for Microsoft Store screenshots).
 
 ## Project structure
 
@@ -139,7 +138,8 @@ TablePlusCommandPalette/
 ├─ Models/        # TablePlus connection / group models
 ├─ Pages/         # Command Palette list pages
 ├─ Services/      # plist parsing and connection lookup
-└─ Assets/        # App and extension icons
+├─ Assets/        # App and extension icons
+└─ build-msix.ps1 # Signed MSIX build script (used by release.yml)
 ```
 
 ## Troubleshooting
@@ -168,5 +168,5 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Disclaimer
 
-This project is an independent extension for Microsoft PowerToys and is not
-affiliated with or endorsed by TablePlus or Microsoft.
+This project is an independent extension for Microsoft PowerToys and is
+not affiliated with or endorsed by TablePlus or Microsoft.
