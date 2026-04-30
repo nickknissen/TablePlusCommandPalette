@@ -25,17 +25,26 @@ Palette item that launches `tableplus://?id=<connection-id>` when invoked.
 
 ## Installation
 
-### Option 1: WinGet
+### Option 1: Microsoft Store (recommended)
+
+[![Get from Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get-blue?logo=microsoft-store)](https://apps.microsoft.com/detail/9P4L93228V63)
+
+Open the listing: <https://apps.microsoft.com/detail/9P4L93228V63>
+
+### Option 2: WinGet (Microsoft Store source)
 
 ```powershell
-winget install nickknissen.TablePlusCommandPalette
+winget install --source msstore 9P4L93228V63
 ```
 
-### Option 2: Manual install
+### Build from source
 
-1. Download the latest installer for your architecture from the project releases.
-2. Run the installer.
-3. Restart Command Palette if it is already running.
+```powershell
+dotnet restore
+dotnet build TablePlusCommandPalette.sln -c Release -p:Platform=x64
+```
+
+See [Development](#development) below for the full build / sideload flow.
 
 ## Usage
 
