@@ -73,18 +73,47 @@ dotnet publish .\TablePlusCommandPalette\TablePlusCommandPalette.csproj `
   /p:WindowsPackageType=None
 ```
 
-## Packaging
+## Releasing
 
-Release MSIX packages are built via `build-msix.ps1`:
+A new release is cut by triggering the `Build Store Bundle` GitHub Actions
+workflow. It builds x64 + ARM64 MSIX, combines them into a single
+`.msixbundle`, tags the commit, and creates a GitHub Release with all
+three files attached.
 
 ```powershell
-.\TablePlusCommandPalette\build-msix.ps1 -Version 1.0.0 -Platforms @('x64','arm64') -Bundle
+gh workflow run store-bundle.yml --repo nickknissen/TablePlusCommandPalette `
+  -f version=1.0.1 `
+  -f release_notes="One-line summary of what changed in this release."
 ```
 
-Notes:
+When the run finishes:
 
-- Builds MSIX packages for **x64** and **arm64** by default
-- Requires the Windows 10/11 SDK installed locally
+1. The release appears at
+   `https://github.com/nickknissen/TablePlusCommandPalette/releases/tag/<version>`.
+2. Download `TablePlusCommandPalette_<version>.0_Bundle.msixbundle` from
+   the release page (or `gh release download <version> --pattern *.msixbundle`).
+3. In [Partner Center](https://partner.microsoft.com/dashboard/home), create a
+   new submission for the app, upload the `.msixbundle` under **Packages**,
+   fill in any updated listing copy, and submit.
+4. Microsoft re-signs the package during ingestion. Once it certifies and
+   publishes (typically 24–72h), the new version is live in the Store.
+
+The MSIX files are unsigned at build time — the Store re-signs during
+ingestion, so no code-signing cert is required.
+
+### Local build for testing
+
+If you want to build the bundle locally without going through the workflow:
+
+```powershell
+dotnet build .\TablePlusCommandPalette\TablePlusCommandPalette.csproj `
+  -c Release -p:GenerateAppxPackageOnBuild=true `
+  -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:SelfContained=true `
+  -p:AppxPackageDir=AppPackages\x64\
+```
+
+(Repeat with `Platform=ARM64` and `RuntimeIdentifier=win-arm64`, then bundle
+with `makeappx bundle /f bundle_mapping.txt /p ...`.)
 
 ## Project structure
 
@@ -94,8 +123,7 @@ TablePlusCommandPalette/
 ├─ Models/        # TablePlus connection / group models
 ├─ Pages/         # Command Palette list pages
 ├─ Services/      # plist parsing and connection lookup
-├─ Assets/        # App and extension icons
-└─ build-msix.ps1 # Release MSIX build script
+└─ Assets/        # App and extension icons
 ```
 
 ## Troubleshooting
